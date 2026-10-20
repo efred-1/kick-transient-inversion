@@ -1,0 +1,93 @@
+Topic 3 - Physics-Informed Inversion of Kick Transients: Data Dictionary
+=========================================================================
+
+Source
+------
+Utah FORGE well 58-32 (MU-ESW1), a geothermal test well near Milford, Utah: public Pason drilling log, Podgorney,
+McLennan and Moore (2018), Geothermal Data Repository, doi:10.15121/1495411, licence CC BY 4.0. Cite the source when
+reusing. Bit record, daily reports and core tests: Nash and Moore (2018), doi:10.15121/1452735; McLennan (2018),
+doi:10.15121/1557418.
+
+Files
+-----
+Topic3_KickTransient_CLEANED_DATA.csv     7,311 rows, one per ~1 ft depth sample (single well, 85.18-7,536.25 ft MD).
+                                          The cleaned well record, the reconstructed clock, and a 'role' column
+                                          showing how each row was used.
+Topic3_KickTransient_SCENARIOS.csv        120 rows, one per synthetic kick, with its true parameters and the
+                                          main estimates from Route 1 (straight lines) and Route 2 (likelihood
+                                          inversion with profile intervals).
+Topic3_KickTransient_SCENARIO_SERIES.csv  37,305 rows: the observed and true pit-gain and shut-in pressure series
+                                          of every scenario, exactly as inverted.
+
+Note: the synthetic kicks are not written into the cleaned record. Each scenario's series were built from a
+fine-grid simulation (160 radial cells) plus real Pit Total residuals, a real baseline drift and real
+wellhead-pressure residuals drawn from this record (paper Section 5.2), and are stored in SCENARIO_SERIES.csv.
+The notebook (Topic3_KickTransient_CODE.ipynb, Section D) regenerates them exactly from the raw file.
+
+CLEANED_DATA columns
+--------------------
+row_id               Original row index in the raw field_data.csv (0-7310); unique key.
+Depth                Measured depth, ft.
+depth_block          1-10, equal-width depth blocks (used for colouring cross-plots).
+is_circulating       True if Flow In > 50 gpm. The 70 non-circulating rows are excluded.
+PitTotal             Total active pit volume, bbl (real, unaltered).
+pit_change           Row-to-row Pit Total change on the circulating series ordered by depth, bbl; blank for
+                     static rows.
+FlowIn               Mud flow rate in, gpm.
+FlowIn_winsorized    FlowIn capped at the 99.9th percentile.
+FlowOutPct           Flow-out paddle reading, % of calibrated baseline (not a volumetric rate).
+PumpPress            Standpipe (pump) pressure, psi.
+WOB, RPM, Torque, Hookload, ROP_1ft, ROP_1min, TempIn, TempOut
+                     Other drilling channels, retained for context. ROP_1min (floored at 5 ft/hr) sets the
+                     reconstructed clock and the drilling-ahead opening times.
+WHPressure           Wellhead pressure, psi; blank where WHPressure_valid is False.
+WHPressure_valid     False for the first 245 rows, where the sensor reads a fixed ~-1,230 psi placeholder.
+dt_hr, t_cum_hr      Reconstructed duration of each circulating row (depth increment / ROP_1min) and the
+                     cumulative circulating time, hours; blank for static rows.
+role                 How the row was used:
+                       noise_library                 circulating row; its Pit Total and wellhead-pressure
+                                                     residuals are part of the real noise libraries
+                       noise_library;host_interval   as above, and inside the 4,800-7,300 ft interval from which
+                                                     scenario host depths were drawn
+                       static_excluded               non-circulating row, not used
+scenario_ids_hosted  Space-separated ids of the scenarios hosted at this row (drilling rate and depth taken
+                     from it); blank otherwise. Join to SCENARIOS.csv.
+
+SCENARIOS columns
+-----------------
+scenario_id          0-119.
+host_row_id          Row of CLEANED_DATA at which the scenario is hosted.
+host_depth_ft        Measured depth of that row, ft.
+geometry             'open' = zone taken in full at once; 'ahead' = zone drilled ahead at the recorded ROP.
+k_md, dp_psi, skin   True permeability (md), underbalance while circulating (psi) and skin factor.
+zone_thickness_ft    True zone thickness, ft; n_slabs = number of slabs it was divided into (1 if open).
+threshold_bbl        Detection threshold (5, 10 or 20 bbl); t_shut_min = time from zone opening to shut-in, min.
+phict_per_psi, mu_cp, C_bbl_per_psi, dpaf_psi
+                     True porosity x total compressibility (1/psi), influx viscosity (cp), wellbore storage
+                     coefficient (bbl/psi) and annular friction lost at shut-in (psi).
+drift_bbl_per_hr     Real baseline drift added to the pit series.
+q_shut_bbl_per_min   True sandface rate in the last minute before shut-in.
+tD_shut              Dimensionless time at shut-in; a_exponent = a of equation (8) at shut-in.
+D230_*               Route 2 with 30 minutes of shut-in pressure: estimate (est) and 95% profile interval
+                     (lo, hi) for ln lambda (lambda = k/mu, md/cp), ln dp (psi) and ln k (md), and the skin
+                     at the optimum. Natural logarithms.
+D215_lnlam_est, D215_lndp_est
+                     Route 2 estimates with 15 minutes of shut-in pressure.
+D1_G_true, D1_G_est, D1_G_lo, D1_G_hi
+                     True value, estimate and 95% interval of G = a ln lambda + ln dp from pit gain alone
+                     (skin and nuisance parameters estimated). -inf / inf mark an interval that did not close.
+D1ideal_G_*          The same with skin and nuisance parameters fixed at their true values.
+horner30_k_md, horner30_dp_psi
+                     Route 1 Horner estimates from 30 minutes of shut-in; blank where no usable line was found.
+recip_rate_kdp       Route 1 reciprocal-rate estimate of k*dp/mu (md psi/cp); blank where the slope was not
+                     positive.
+
+SCENARIO_SERIES columns
+-----------------------
+scenario_id               Join to SCENARIOS.csv.
+channel                   'pit_volume_change_bbl' (one sample per minute, from 30 min before opening to
+                          shut-in) or 'shutin_pressure_rise_psi' (one sample per 10 s for 30 min after shut-in).
+t_min_since_zone_opened   Time of the sample, minutes since the zone was first opened (negative before).
+observed                  The series as inverted: true signal + real drift + real noise (pit), or true rise +
+                          real wellhead-pressure noise (shut-in).
+true_signal               The noise-free signal: true influx (pit, without drift) or true pressure rise.
